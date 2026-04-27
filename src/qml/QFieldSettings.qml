@@ -1948,7 +1948,7 @@ Page {
                 }
 
                 Component.onCompleted: {
-                  text = isNaN(positioningSettings.geomaskingRadius) ? '' : positioningSettings.geomaskingRadius;
+                  text = isNaN(positioningSettings.geomaskingRadius) ? '' : String(positioningSettings.geomaskingRadius);
                 }
 
                 onTextChanged: {

@@ -713,37 +713,12 @@ void Positioning::onPositionInformationChanged()
     emit averagedPositionCountChanged();
   }
 
-  if ( mPositionInformation.isValid() )
-  {
-    double lat = mPositionInformation.latitude();
-    double lon = mPositionInformation.longitude();
-    if ( mGeomaskingEnabled )
-    {
-      lat += mGeomaskingOffsetLat;
-      lon += mGeomaskingOffsetLon;
-    }
-    mSourcePosition = QgsPoint( lon, lat, mPositionInformation.elevation() );
-  }
-  else
-  {
-    mSourcePosition.clear();
-    mProjectedPosition.clear();
-  }
-
   if ( mPositionInformation.orientationValid() )
   {
     mPositionInformation.setOrientation( adjustOrientation( mPositionInformation.orientation() ) );
   }
 
-  if ( mCoordinateTransformer && !mSourcePosition.isEmpty() )
-  {
-    // positionInformationChanged() will be emitted in this function
-    processProjectedPosition();
-  }
-  else
-  {
-    emit positionInformationChanged();
-  }
+  applyGeomaskAndProject();
 }
 
 void Positioning::applyGeomaskAndProject()
@@ -767,6 +742,7 @@ void Positioning::applyGeomaskAndProject()
 
   if ( mCoordinateTransformer && !mSourcePosition.isEmpty() )
   {
+    // positionInformationChanged() will be emitted in this function
     processProjectedPosition();
   }
   else
@@ -833,19 +809,23 @@ void Positioning::setAveragedPositionFilterAccuracy( bool enabled )
 
 void Positioning::generateGeomaskOffset()
 {
-  // Generate a random angle and a random distance within [0, radius]
+  // Generate a random angle and a random distance within the radius.
+  // Use sqrt() to ensure uniform distribution over the circular area
+  // (without it, points would be more concentrated near the centre).
   const double angle = QRandomGenerator::global()->generateDouble() * 2.0 * M_PI;
-  const double distance = QRandomGenerator::global()->generateDouble() * mGeomaskingRadius;
+  const double distance = std::sqrt( QRandomGenerator::global()->generateDouble() ) * mGeomaskingRadius;
 
   // Convert to lat/lon offsets (approximate, valid for small distances)
   // 1 degree of latitude ≈ 111320 m
   mGeomaskingOffsetLat = ( distance * std::cos( angle ) ) / 111320.0;
-  // 1 degree of longitude ≈ 111320 * cos(lat) m; use 0 if no position yet
+  // 1 degree of longitude ≈ 111320 * cos(lat) m; use equator approximation if no position yet
   const double latRad = ( !std::isnan( mPositionInformation.latitude() ) )
                           ? mPositionInformation.latitude() * M_PI / 180.0
                           : 0.0;
   const double lonFactor = std::cos( latRad );
-  mGeomaskingOffsetLon = ( lonFactor > 1e-10 ) ? ( distance * std::sin( angle ) ) / ( 111320.0 * lonFactor ) : 0.0;
+  // Threshold avoids division by near-zero at the geographic poles
+  static constexpr double poleThreshold = 1e-10;
+  mGeomaskingOffsetLon = ( lonFactor > poleThreshold ) ? ( distance * std::sin( angle ) ) / ( 111320.0 * lonFactor ) : 0.0;
 }
 
 void Positioning::setGeomaskingEnabled( bool enabled )
@@ -876,7 +856,7 @@ void Positioning::setGeomaskingEnabled( bool enabled )
 
 void Positioning::setGeomaskingRadius( double radius )
 {
-  if ( qFuzzyCompare( mGeomaskingRadius, radius ) )
+  if ( qFuzzyIsNull( mGeomaskingRadius - radius ) )
     return;
 
   mGeomaskingRadius = radius;
