@@ -399,6 +399,9 @@ ApplicationWindow {
     loggingPath: platformUtilities.appDataDirs()[0] + "/logs"
     logging: positioningSettings.logging
 
+    geomaskingEnabled: positioningSettings.geomaskingEnabled
+    geomaskingRadius: positioningSettings.geomaskingRadius
+
     onPositionInformationChanged: {
       if (active) {
         if (jumpToPosition && positionSource.projectedPosition.x) {

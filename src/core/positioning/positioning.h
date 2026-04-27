@@ -72,6 +72,9 @@ class Positioning : public QObject
     Q_PROPERTY( double badAccuracyThreshold READ badAccuracyThreshold WRITE setBadAccuracyThreshold NOTIFY badAccuracyThresholdChanged )
     Q_PROPERTY( double excellentAccuracyThreshold READ excellentAccuracyThreshold WRITE setExcellentAccuracyThreshold NOTIFY excellentAccuracyThresholdChanged )
 
+    Q_PROPERTY( bool geomaskingEnabled READ geomaskingEnabled WRITE setGeomaskingEnabled NOTIFY geomaskingEnabledChanged )
+    Q_PROPERTY( double geomaskingRadius READ geomaskingRadius WRITE setGeomaskingRadius NOTIFY geomaskingRadiusChanged )
+
   public:
     explicit Positioning( QObject *parent = nullptr );
     virtual ~Positioning() = default;
@@ -302,6 +305,39 @@ class Positioning : public QObject
      */
     void setExcellentAccuracyThreshold( double threshold );
 
+    /**
+     * Returns whether geomasking is enabled. When enabled, reported positions are
+     * displaced by a random offset within a configurable radius, protecting the
+     * precise location from disclosure.
+     * \see setGeomaskingEnabled
+     */
+    bool geomaskingEnabled() const { return mGeomaskingEnabled; }
+
+    /**
+     * Sets whether geomasking is \a enabled.
+     * \see geomaskingEnabled
+     */
+    void setGeomaskingEnabled( bool enabled );
+
+    /**
+     * Returns the geomasking radius in meters. Positions will be displaced by a
+     * random amount between zero and this radius.
+     * \see setGeomaskingRadius
+     */
+    double geomaskingRadius() const { return mGeomaskingRadius; }
+
+    /**
+     * Sets the geomasking \a radius in meters.
+     * \see geomaskingRadius
+     */
+    void setGeomaskingRadius( double radius );
+
+    /**
+     * Regenerates the random geomasking offset. Call this to change the current
+     * displacement while geomasking remains active.
+     */
+    Q_INVOKABLE void regenerateGeomask();
+
   signals:
     // Signals from positioning source properties cached locally and forwarded onwards
     void activeChanged();
@@ -333,6 +369,8 @@ class Positioning : public QObject
     void excellentAccuracyThresholdChanged();
     void serviceModeChanged();
     void backgroundModeChanged();
+    void geomaskingEnabledChanged();
+    void geomaskingRadiusChanged();
 
   private slots:
     void onActiveChanged();
@@ -352,6 +390,8 @@ class Positioning : public QObject
 
     void processProjectedPosition();
     double adjustOrientation( double orientation ) const;
+
+    void applyGeomaskAndProject();
 
     PositioningSource *mPositioningSource = nullptr;
     QRemoteObjectHost mHost;
@@ -381,6 +421,13 @@ class Positioning : public QObject
     bool mAveragedPositionFilterAccuracy = false;
     double mBadAccuracyThreshold = std::numeric_limits<double>::quiet_NaN();
     double mExcellentAccuracyThreshold = std::numeric_limits<double>::quiet_NaN();
+
+    bool mGeomaskingEnabled = false;
+    double mGeomaskingRadius = 100.0;
+    double mGeomaskingOffsetLat = 0.0;
+    double mGeomaskingOffsetLon = 0.0;
+
+    void generateGeomaskOffset();
 };
 
 #endif // POSITIONING_H
