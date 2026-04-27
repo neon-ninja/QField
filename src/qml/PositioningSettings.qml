@@ -56,5 +56,8 @@ Settings {
   property bool geofencingPreventDigitizingDuringAlert: false
   property bool egenioussEnabled: false
 
+  property bool geomaskingEnabled: false
+  property double geomaskingRadius: 100.0
+
   property int positionFollowMode: PositioningSettings.FollowMode.PositionOnly
 }

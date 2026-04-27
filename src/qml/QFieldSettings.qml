@@ -1893,6 +1893,102 @@ Page {
                   positioningSettings.logging = checked;
                 }
               }
+
+              Item {
+                // empty cell in grid layout
+                width: 1
+              }
+
+              Label {
+                text: qsTr("Geomasking")
+                font: Theme.defaultFont
+                color: Theme.mainTextColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+
+                MouseArea {
+                  anchors.fill: parent
+                  onClicked: geomaskingSwitch.toggle()
+                }
+              }
+
+              QfSwitch {
+                id: geomaskingSwitch
+                Layout.preferredWidth: implicitContentWidth
+                Layout.alignment: Qt.AlignTop
+                checked: positioningSettings.geomaskingEnabled
+                onCheckedChanged: {
+                  positioningSettings.geomaskingEnabled = checked;
+                }
+              }
+
+              Label {
+                text: qsTr("Masking radius [m]")
+                enabled: geomaskingSwitch.checked
+                visible: geomaskingSwitch.checked
+                font: Theme.defaultFont
+                color: Theme.mainTextColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.leftMargin: 8
+              }
+
+              QfTextField {
+                id: geomaskingRadiusInput
+                enabled: geomaskingSwitch.checked
+                visible: geomaskingSwitch.checked
+                width: geomaskingSwitch.width
+                font: Theme.defaultFont
+                horizontalAlignment: TextInput.AlignHCenter
+                Layout.preferredWidth: width
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                validator: DoubleValidator {
+                  bottom: 0
+                  locale: 'C'
+                }
+
+                Component.onCompleted: {
+                  text = isNaN(positioningSettings.geomaskingRadius) ? '' : positioningSettings.geomaskingRadius;
+                }
+
+                onTextChanged: {
+                  if (text.length === 0 || isNaN(text)) {
+                    positioningSettings.geomaskingRadius = NaN;
+                  } else {
+                    positioningSettings.geomaskingRadius = parseFloat(text);
+                  }
+                }
+              }
+
+              RowLayout {
+                Layout.fillWidth: true
+                Layout.columnSpan: 2
+                enabled: geomaskingSwitch.checked
+                visible: geomaskingSwitch.checked
+
+                QfButton {
+                  leftPadding: 10
+                  rightPadding: 10
+                  text: qsTr("Regenerate offset")
+                  onClicked: {
+                    positionSource.regenerateGeomask();
+                  }
+                }
+
+                Item {
+                  Layout.fillWidth: true
+                }
+              }
+
+              Label {
+                topPadding: 0
+                text: qsTr("When enabled, reported positions are displaced by a random offset within the given radius to protect your precise location. Use the regenerate button to create a new random offset.")
+                font: Theme.tipFont
+                color: Theme.secondaryTextColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.columnSpan: 2
+              }
             }
 
             Item {

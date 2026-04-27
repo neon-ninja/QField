@@ -26,6 +26,7 @@
 #include <QFile>
 #include <QGuiApplication>
 #include <QPermissions>
+#include <QRandomGenerator>
 #include <QRemoteObjectPendingCall>
 #include <QScreen>
 #include <qgsapplication.h>
@@ -714,7 +715,14 @@ void Positioning::onPositionInformationChanged()
 
   if ( mPositionInformation.isValid() )
   {
-    mSourcePosition = QgsPoint( mPositionInformation.longitude(), mPositionInformation.latitude(), mPositionInformation.elevation() );
+    double lat = mPositionInformation.latitude();
+    double lon = mPositionInformation.longitude();
+    if ( mGeomaskingEnabled )
+    {
+      lat += mGeomaskingOffsetLat;
+      lon += mGeomaskingOffsetLon;
+    }
+    mSourcePosition = QgsPoint( lon, lat, mPositionInformation.elevation() );
   }
   else
   {
@@ -730,6 +738,35 @@ void Positioning::onPositionInformationChanged()
   if ( mCoordinateTransformer && !mSourcePosition.isEmpty() )
   {
     // positionInformationChanged() will be emitted in this function
+    processProjectedPosition();
+  }
+  else
+  {
+    emit positionInformationChanged();
+  }
+}
+
+void Positioning::applyGeomaskAndProject()
+{
+  if ( mPositionInformation.isValid() )
+  {
+    double lat = mPositionInformation.latitude();
+    double lon = mPositionInformation.longitude();
+    if ( mGeomaskingEnabled )
+    {
+      lat += mGeomaskingOffsetLat;
+      lon += mGeomaskingOffsetLon;
+    }
+    mSourcePosition = QgsPoint( lon, lat, mPositionInformation.elevation() );
+  }
+  else
+  {
+    mSourcePosition.clear();
+    mProjectedPosition.clear();
+  }
+
+  if ( mCoordinateTransformer && !mSourcePosition.isEmpty() )
+  {
     processProjectedPosition();
   }
   else
@@ -792,4 +829,79 @@ void Positioning::setAveragedPositionFilterAccuracy( bool enabled )
 
   mAveragedPositionFilterAccuracy = enabled;
   emit averagedPositionFilterAccuracyChanged();
+}
+
+void Positioning::generateGeomaskOffset()
+{
+  // Generate a random angle and a random distance within [0, radius]
+  const double angle = QRandomGenerator::global()->generateDouble() * 2.0 * M_PI;
+  const double distance = QRandomGenerator::global()->generateDouble() * mGeomaskingRadius;
+
+  // Convert to lat/lon offsets (approximate, valid for small distances)
+  // 1 degree of latitude ≈ 111320 m
+  mGeomaskingOffsetLat = ( distance * std::cos( angle ) ) / 111320.0;
+  // 1 degree of longitude ≈ 111320 * cos(lat) m; use 0 if no position yet
+  const double latRad = ( !std::isnan( mPositionInformation.latitude() ) )
+                          ? mPositionInformation.latitude() * M_PI / 180.0
+                          : 0.0;
+  const double lonFactor = std::cos( latRad );
+  mGeomaskingOffsetLon = ( lonFactor > 1e-10 ) ? ( distance * std::sin( angle ) ) / ( 111320.0 * lonFactor ) : 0.0;
+}
+
+void Positioning::setGeomaskingEnabled( bool enabled )
+{
+  if ( mGeomaskingEnabled == enabled )
+    return;
+
+  mGeomaskingEnabled = enabled;
+
+  if ( mGeomaskingEnabled )
+  {
+    generateGeomaskOffset();
+  }
+  else
+  {
+    mGeomaskingOffsetLat = 0.0;
+    mGeomaskingOffsetLon = 0.0;
+  }
+
+  // Re-process current position with the new masking state
+  if ( mPositionInformation.isValid() )
+  {
+    applyGeomaskAndProject();
+  }
+
+  emit geomaskingEnabledChanged();
+}
+
+void Positioning::setGeomaskingRadius( double radius )
+{
+  if ( qFuzzyCompare( mGeomaskingRadius, radius ) )
+    return;
+
+  mGeomaskingRadius = radius;
+
+  if ( mGeomaskingEnabled )
+  {
+    generateGeomaskOffset();
+    if ( mPositionInformation.isValid() )
+    {
+      applyGeomaskAndProject();
+    }
+  }
+
+  emit geomaskingRadiusChanged();
+}
+
+void Positioning::regenerateGeomask()
+{
+  if ( !mGeomaskingEnabled )
+    return;
+
+  generateGeomaskOffset();
+
+  if ( mPositionInformation.isValid() )
+  {
+    applyGeomaskAndProject();
+  }
 }
